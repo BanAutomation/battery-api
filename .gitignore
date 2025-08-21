@@ -4,10 +4,17 @@ __pycache__/
 .venv/
 venv/
 .env
+
 # Node
 node_modules/
+
 # OS / editors
 .DS_Store
 Thumbs.db
-# Local runs
+
+# Outputs / local scratch
 *.log
+/tmp/
+*.xlsx
+*.csv
+*.pdf

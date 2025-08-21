@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+# Node
+node_modules/
+# OS / editors
+.DS_Store
+Thumbs.db
+# Local runs
+*.log

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/*.py": {
+      "maxDuration": 60,
+      "memory": 1024,
+      "regions": [ "sin1" ]
+    },
+    "api/*.ts": {
+      "maxDuration": 60,
+      "memory": 256,
+      "regions": [ "sin1" ]
+    }
+  }
+}

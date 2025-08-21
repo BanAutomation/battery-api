@@ -1,0 +1,11 @@
+{
+  "name": "battery-api",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "latest"
+  },
+  "scripts": {
+    "dev": "echo \"Local dev: run uvicorn api.analyze:app --reload\" && exit 0"
+  }
+}

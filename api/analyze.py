@@ -14,11 +14,11 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://your-bubble-app.bubbleapps.io",   # <- replace with your Bubble app domain(s)
-        "https://yourcustomdomain.com"
+        "https://taskautomation.bubbleapps.io/",
     ],
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["*"],
+    allow_credentials=False
 )
 
 def _store_bytes(filename: str, content: bytes, content_type: str) -> str:

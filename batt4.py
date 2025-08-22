@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
+import os
+import matplotlib
+matplotlib.use("Agg")
 
 # =====================
 # CONFIG
@@ -31,8 +34,8 @@ MD_TARIFF_RM_PER_KW = 97.06        # RM per kW of MD
 BILLING_PERIODS_PER_YEAR = 12       # months
 
 # Outputs
-SWEEP_CSV = 'ThresholdSweep_MayJun_stats.csv'
-VISUALIZATIONS_PDF = 'ThresholdSweep_MayJun_visualizations.pdf'
+SWEEP_CSV = os.environ.get("OUT_CSV_PATH", "/tmp/ThresholdSweep_stats.csv")
+VISUALIZATIONS_PDF = os.environ.get("OUT_PDF_PATH", "/tmp/ThresholdSweep_visualizations.pdf")
 
 
 # =====================
@@ -366,6 +369,114 @@ RECOMMENDATIONS:
     
     print(f"Saved visualizations to: {VISUALIZATIONS_PDF}")
 
+import pandas as pd
+import numpy as np
+from typing import List, Tuple
+
+def _days_from_df(
+    df0: pd.DataFrame,
+    year_months: List[Tuple[int, int]] = None,
+    start_hour: int = 14,
+    end_hour: int = 22
+) -> list:
+    """
+    Build the 'days' structure your compute_* function expects:
+    [(date, demand_kw_array, time_labels)] filtered by months and 14:00–22:00.
+    """
+    if year_months is None:
+        # Use your existing YEAR_MONTHS if present, else default to May+June 2025
+        try:
+            year_months = YEAR_MONTHS  # noqa: F821 - defined in your file
+        except NameError:
+            year_months = [(2025, 5), (2025, 6)]
+
+    df = df0.copy()
+    required = {"start_time", "kw_import"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing column(s): {', '.join(sorted(missing))}")
+
+    df["start_time"] = pd.to_datetime(df["start_time"], errors="coerce")
+    if df["start_time"].isna().all():
+        raise ValueError("Could not parse any 'start_time' values as datetimes.")
+
+    days = []
+    for (y, m) in year_months:
+        mask = (df["start_time"].dt.year == y) & (df["start_time"].dt.month == m)
+        dfm = df.loc[mask].sort_values("start_time")
+        if dfm.empty:
+            continue
+        g = dfm[(dfm["start_time"].dt.hour >= start_hour) & (dfm["start_time"].dt.hour < end_hour)]
+        for d, gday in g.groupby(g["start_time"].dt.date):
+            if gday.empty:
+                continue
+            demand_kw = gday["kw_import"].astype(float).to_numpy()
+            labels = gday["start_time"].dt.strftime("%H:%M").tolist()
+            days.append((d, demand_kw, labels))
+
+    if not days:
+        raise RuntimeError("No rows after applying month filter and 14:00–22:00 window.")
+    days.sort(key=lambda x: x[0])
+    return days
+
+
+def run_pipeline_from_df(
+    df0: pd.DataFrame,
+    year_months: List[Tuple[int, int]] = None,
+    csv_path: str = SWEEP_CSV,
+    pdf_path: str = VISUALIZATIONS_PDF
+):
+    """
+    Entry point for the API: builds days, computes stats, writes CSV/PDF under /tmp,
+    and returns the two output paths.
+    """
+    if year_months is None:
+        try:
+            year_months = YEAR_MONTHS  # noqa: F821
+        except NameError:
+            year_months = [(2025, 5), (2025, 6)]
+
+    # Build days for your compute function
+    days = _days_from_df(df0, year_months)
+
+    # Reuse your existing compute function + constants
+    try:
+        dt_h = INTERVAL_HOURS           # noqa: F821
+    except NameError:
+        dt_h = 0.5
+    try:
+        start_kw = SWEEP_START_KW       # noqa: F821
+        end_kw   = SWEEP_END_KW         # noqa: F821
+        step_kw  = SWEEP_STEP_KW        # noqa: F821
+    except NameError:
+        start_kw, end_kw, step_kw = 0.0, 50.0, 0.5  # sensible defaults
+
+    rows = compute_threshold_sweep_stats_highest(  # uses your existing function
+        days, dt_h=dt_h, start_kw=start_kw, end_kw=end_kw, step_kw=step_kw
+    )
+    df = pd.DataFrame(rows)
+
+    # Try to order columns if your compute function produces these names
+    preferred_cols = [
+        'Threshold_kW',
+        'Highest_Energy_kWh', 'Highest_Energy_Day',
+        'Highest_Peak_Shaved_kW', 'Highest_Peak_Day',
+        'Min_Units_Required', 'Min_Capacity_kWh',
+        'Limiting_Factor', 'Payback_years', 'Efficiency',
+        'Fits_1x233', 'Fits_2x233(466)', 'Fits_3x233(699)', 'Fits_4x233(932)'
+    ]
+    if set(preferred_cols).issubset(df.columns):
+        df = df[preferred_cols]
+
+    # Write outputs to /tmp and build the PDF using your existing function
+    df.to_csv(csv_path, index=False)
+    try:
+        create_visualizations(df, pdf_path=pdf_path)  # if you accept an explicit path
+    except TypeError:
+        # Fallback: old signature create_visualizations(df) using VISUALIZATIONS_PDF constant
+        create_visualizations(df)
+
+    return csv_path, pdf_path
 
 # =====================
 # Main
